@@ -1,1 +1,451 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>해양엘니뇨지수(ONI) 시각화 대시보드</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-elnino: #ef4444;
+            --accent-lanina: #3b82f6;
+            --accent-normal: #10b981;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            padding: 2rem 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #3b82f6, #ef4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* 컨트롤러 패널 */
+        .control-panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        select {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        /* 상태 요약 지표 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            border-left: 5px solid var(--border-color);
+        }
+
+        .stat-card.elnino { border-left-color: var(--accent-elnino); }
+        .stat-card.normal { border-left-color: var(--accent-normal); }
+        .stat-card.lanina { border-left-color: var(--accent-lanina); }
+
+        .stat-card h3 {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .stat-card p {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .stat-card span {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* 차트 영역 */
+        .chart-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            position: relative;
+            height: 500px;
+            width: 100%;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        @media (max-width: 768px) {
+            .control-panel {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .chart-card {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>El Niño & La Niña Monitoring Dashboard</h1>
+        <p>3개월 이동평균 해수면 온도 편차 지수(Oceanic Niño Index, ONI) 시각화 도구 (1950 - 2026)</p>
+    </header>
+
+    <div class="control-panel">
+        <div class="filter-group">
+            <label for="startYear">시작 연도:</label>
+            <select id="startYear"></select>
+            <label for="endYear">종료 연도:</label>
+            <select id="endYear"></select>
+        </div>
+        <div class="filter-group">
+            <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                기준: <span style="color: var(--accent-elnino); font-weight: bold;">엘니뇨 (≥ +0.5)</span> | 
+                <span style="color: var(--accent-normal); font-weight: bold;">평상시</span> | 
+                <span style="color: var(--accent-lanina); font-weight: bold;">라니냐 (≤ -0.5)</span>
+            </span>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card elnino">
+            <h3>엘니뇨 기준값</h3>
+            <p>+0.5 ℃ 이상</p>
+            <span>해수면 온도 상승기</span>
+        </div>
+        <div class="stat-card normal">
+            <h3>평상시 기준값</h3>
+            <p>-0.5 ~ +0.5 ℃</p>
+            <span>중립 상태 에피소드</span>
+        </div>
+        <div class="stat-card lanina">
+            <h3>라니냐 기준값</h3>
+            <p>-0.5 ℃ 이하</p>
+            <span>해수면 온도 하강기</span>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <canvas id="oniChart"></canvas>
+    </div>
+</div>
+
+<script>
+    // 1950년 ~ 2026년 ONI 데이터셋
+    const rawOniData = [
+        { "Year": 1950, "DJF": -1.5, "JFM": -1.3, "FMA": -1.2, "MAM": -1.2, "AMJ": -1.1, "MJJ": -0.9, "JJA": -0.5, "JAS": -0.4, "ASO": -0.4, "SON": -0.4, "OND": -0.6, "NDJ": -0.8 },
+        { "Year": 1951, "DJF": -0.8, "JFM": -0.5, "FMA": -0.2, "MAM": 0.2, "AMJ": 0.4, "MJJ": 0.6, "JJA": 0.7, "JAS": 0.9, "ASO": 1.0, "SON": 1.2, "OND": 1.0, "NDJ": 0.8 },
+        { "Year": 1952, "DJF": 0.5, "JFM": 0.4, "FMA": 0.3, "MAM": 0.3, "AMJ": 0.2, "MJJ": 0.0, "JJA": -0.1, "JAS": 0.0, "ASO": 0.2, "SON": 0.1, "OND": 0.0, "NDJ": 0.1 },
+        { "Year": 1953, "DJF": 0.4, "JFM": 0.6, "FMA": 0.6, "MAM": 0.7, "AMJ": 0.8, "MJJ": 0.8, "JJA": 0.7, "JAS": 0.7, "ASO": 0.8, "SON": 0.8, "OND": 0.8, "NDJ": 0.8 },
+        { "Year": 1954, "DJF": 0.8, "JFM": 0.5, "FMA": 0.0, "MAM": -0.4, "AMJ": -0.5, "MJJ": -0.5, "JJA": -0.6, "JAS": -0.8, "ASO": -0.9, "SON": -0.8, "OND": -0.7, "NDJ": -0.7 },
+        { "Year": 1955, "DJF": -0.7, "JFM": -0.6, "FMA": -0.7, "MAM": -0.8, "AMJ": -0.8, "MJJ": -0.7, "JJA": -0.7, "JAS": -0.7, "ASO": -1.1, "SON": -1.4, "OND": -1.7, "NDJ": -1.5 },
+        { "Year": 1956, "DJF": -1.1, "JFM": -0.8, "FMA": -0.6, "MAM": -0.5, "AMJ": -0.5, "MJJ": -0.5, "JJA": -0.6, "JAS": -0.6, "ASO": -0.5, "SON": -0.4, "OND": -0.4, "NDJ": -0.4 },
+        { "Year": 1957, "DJF": -0.2, "JFM": 0.1, "FMA": 0.4, "MAM": 0.7, "AMJ": 0.9, "MJJ": 1.1, "JJA": 1.3, "JAS": 1.3, "ASO": 1.3, "SON": 1.4, "OND": 1.5, "NDJ": 1.7 },
+        { "Year": 1958, "DJF": 1.8, "JFM": 1.7, "FMA": 1.3, "MAM": 0.9, "AMJ": 0.7, "MJJ": 0.6, "JJA": 0.6, "JAS": 0.4, "ASO": 0.4, "SON": 0.4, "OND": 0.5, "NDJ": 0.6 },
+        { "Year": 1959, "DJF": 0.6, "JFM": 0.6, "FMA": 0.5, "MAM": 0.3, "AMJ": 0.2, "MJJ": -0.1, "JJA": -0.2, "JAS": -0.3, "ASO": -0.1, "SON": 0.0, "OND": 0.0, "NDJ": 0.0 },
+        { "Year": 1960, "DJF": -0.1, "JFM": -0.1, "FMA": -0.1, "MAM": 0.0, "AMJ": 0.0, "MJJ": 0.0, "JJA": 0.1, "JAS": 0.2, "ASO": 0.3, "SON": 0.2, "OND": 0.1, "NDJ": 0.1 },
+        { "Year": 1961, "DJF": 0.0, "JFM": 0.0, "FMA": 0.0, "MAM": 0.1, "AMJ": 0.2, "MJJ": 0.3, "JJA": 0.1, "JAS": -0.1, "ASO": -0.3, "SON": -0.3, "OND": -0.2, "NDJ": -0.2 },
+        { "Year": 1962, "DJF": -0.2, "JFM": -0.2, "FMA": -0.2, "MAM": -0.3, "AMJ": -0.3, "MJJ": -0.2, "JJA": 0.0, "JAS": -0.1, "ASO": -0.1, "SON": -0.2, "OND": -0.3, "NDJ": -0.4 },
+        { "Year": 1963, "DJF": -0.4, "JFM": -0.2, "FMA": 0.2, "MAM": 0.3, "AMJ": 0.3, "MJJ": 0.5, "JJA": 0.9, "JAS": 1.1, "ASO": 1.2, "SON": 1.3, "OND": 1.4, "NDJ": 1.3 },
+        { "Year": 1964, "DJF": 1.1, "JFM": 0.6, "FMA": 0.1, "MAM": -0.3, "AMJ": -0.6, "MJJ": -0.6, "JJA": -0.6, "JAS": -0.7, "ASO": -0.8, "SON": -0.8, "OND": -0.8, "NDJ": -0.8 },
+        { "Year": 1965, "DJF": -0.6, "JFM": -0.3, "FMA": -0.1, "MAM": 0.2, "AMJ": 0.5, "MJJ": 0.8, "JJA": 1.2, "JAS": 1.5, "ASO": 1.9, "SON": 2.0, "OND": 2.0, "NDJ": 1.7 },
+        { "Year": 1966, "DJF": 1.4, "JFM": 1.2, "FMA": 1.0, "MAM": 0.7, "AMJ": 0.4, "MJJ": 0.2, "JJA": 0.2, "JAS": 0.1, "ASO": -0.1, "SON": -0.1, "OND": -0.2, "NDJ": -0.3 },
+        { "Year": 1967, "DJF": -0.4, "JFM": -0.5, "FMA": -0.5, "MAM": -0.4, "AMJ": -0.2, "MJJ": 0.0, "JJA": 0.0, "JAS": -0.2, "ASO": -0.3, "SON": -0.4, "OND": -0.3, "NDJ": -0.4 },
+        { "Year": 1968, "DJF": -0.6, "JFM": -0.7, "FMA": -0.6, "MAM": -0.4, "AMJ": 0.0, "MJJ": 0.3, "JJA": 0.6, "JAS": 0.5, "ASO": 0.4, "SON": 0.5, "OND": 0.7, "NDJ": 1.0 },
+        { "Year": 1969, "DJF": 1.1, "JFM": 1.1, "FMA": 0.9, "MAM": 0.8, "AMJ": 0.6, "MJJ": 0.4, "JJA": 0.4, "JAS": 0.5, "ASO": 0.8, "SON": 0.9, "OND": 0.8, "NDJ": 0.6 },
+        { "Year": 1970, "DJF": 0.5, "JFM": 0.3, "FMA": 0.3, "MAM": 0.2, "AMJ": 0.0, "MJJ": -0.3, "JJA": -0.6, "JAS": -0.8, "ASO": -0.8, "SON": -0.7, "OND": -0.9, "NDJ": -1.1 },
+        { "Year": 1971, "DJF": -1.4, "JFM": -1.4, "FMA": -1.1, "MAM": -0.8, "AMJ": -0.7, "MJJ": -0.7, "JJA": -0.8, "JAS": -0.8, "ASO": -0.8, "SON": -0.9, "OND": -1.0, "NDJ": -0.9 },
+        { "Year": 1972, "DJF": -0.7, "JFM": -0.4, "FMA": 0.1, "MAM": 0.4, "AMJ": 0.7, "MJJ": 0.9, "JJA": 1.1, "JAS": 1.4, "ASO": 1.6, "SON": 1.8, "OND": 2.1, "NDJ": 2.1 },
+        { "Year": 1973, "DJF": 1.8, "JFM": 1.2, "FMA": 0.5, "MAM": -0.1, "AMJ": -0.5, "MJJ": -0.9, "JJA": -1.1, "JAS": -1.3, "ASO": -1.5, "SON": -1.7, "OND": -1.9, "NDJ": -2.0 },
+        { "Year": 1974, "DJF": -1.8, "JFM": -1.6, "FMA": -1.2, "MAM": -1.0, "AMJ": -0.9, "MJJ": -0.8, "JJA": -0.5, "JAS": -0.4, "ASO": -0.4, "SON": -0.6, "OND": -0.8, "NDJ": -0.6 },
+        { "Year": 1975, "DJF": -0.5, "JFM": -0.6, "FMA": -0.7, "MAM": -0.7, "AMJ": -0.8, "MJJ": -1.0, "JJA": -1.1, "JAS": -1.2, "ASO": -1.4, "SON": -1.4, "OND": -1.6, "NDJ": -1.7 },
+        { "Year": 1976, "DJF": -1.6, "JFM": -1.2, "FMA": -0.7, "MAM": -0.5, "AMJ": -0.3, "MJJ": 0.0, "JJA": 0.2, "JAS": 0.4, "ASO": 0.6, "SON": 0.8, "OND": 0.9, "NDJ": 0.8 },
+        { "Year": 1977, "DJF": 0.7, "JFM": 0.6, "FMA": 0.3, "MAM": 0.2, "AMJ": 0.2, "MJJ": 0.3, "JJA": 0.4, "JAS": 0.4, "ASO": 0.6, "SON": 0.7, "OND": 0.8, "NDJ": 0.8 },
+        { "Year": 1978, "DJF": 0.7, "JFM": 0.4, "FMA": 0.1, "MAM": -0.2, "AMJ": -0.3, "MJJ": -0.3, "JJA": -0.4, "JAS": -0.4, "ASO": -0.4, "SON": -0.3, "OND": -0.1, "NDJ": 0.0 },
+        { "Year": 1979, "DJF": 0.0, "JFM": 0.1, "FMA": 0.2, "MAM": 0.3, "AMJ": 0.2, "MJJ": 0.0, "JJA": 0.0, "JAS": 0.2, "ASO": 0.3, "SON": 0.5, "OND": 0.5, "NDJ": 0.6 },
+        { "Year": 1980, "DJF": 0.6, "JFM": 0.5, "FMA": 0.3, "MAM": 0.4, "AMJ": 0.5, "MJJ": 0.5, "JJA": 0.3, "JAS": 0.0, "ASO": -0.1, "SON": 0.0, "OND": 0.1, "NDJ": 0.0 },
+        { "Year": 1981, "DJF": -0.3, "JFM": -0.5, "FMA": -0.5, "MAM": -0.4, "AMJ": -0.3, "MJJ": -0.3, "JJA": -0.3, "JAS": -0.2, "ASO": -0.2, "SON": -0.1, "OND": -0.2, "NDJ": -0.1 },
+        { "Year": 1982, "DJF": 0.0, "JFM": 0.1, "FMA": 0.2, "MAM": 0.5, "AMJ": 0.7, "MJJ": 0.7, "JJA": 0.8, "JAS": 1.1, "ASO": 1.6, "SON": 2.0, "OND": 2.2, "NDJ": 2.2 },
+        { "Year": 1983, "DJF": 2.2, "JFM": 1.9, "FMA": 1.5, "MAM": 1.3, "AMJ": 1.1, "MJJ": 0.7, "JJA": 0.3, "JAS": -0.1, "ASO": -0.5, "SON": -0.8, "OND": -1.0, "NDJ": -0.9 },
+        { "Year": 1984, "DJF": -0.6, "JFM": -0.4, "FMA": -0.3, "MAM": -0.4, "AMJ": -0.5, "MJJ": -0.4, "JJA": -0.3, "JAS": -0.2, "ASO": -0.2, "SON": -0.6, "OND": -0.9, "NDJ": -1.1 },
+        { "Year": 1985, "DJF": -1.0, "JFM": -0.8, "FMA": -0.8, "MAM": -0.8, "AMJ": -0.8, "MJJ": -0.6, "JJA": -0.5, "JAS": -0.5, "ASO": -0.4, "SON": -0.3, "OND": -0.3, "NDJ": -0.4 },
+        { "Year": 1986, "DJF": -0.5, "JFM": -0.5, "FMA": -0.3, "MAM": -0.2, "AMJ": -0.1, "MJJ": 0.0, "JJA": 0.2, "JAS": 0.4, "ASO": 0.7, "SON": 0.9, "OND": 1.1, "NDJ": 1.2 },
+        { "Year": 1987, "DJF": 1.2, "JFM": 1.2, "FMA": 1.1, "MAM": 0.9, "AMJ": 1.0, "MJJ": 1.2, "JJA": 1.5, "JAS": 1.7, "ASO": 1.6, "SON": 1.5, "OND": 1.3, "NDJ": 1.1 },
+        { "Year": 1988, "DJF": 0.8, "JFM": 0.5, "FMA": 0.1, "MAM": -0.3, "AMJ": -0.9, "MJJ": -1.3, "JJA": -1.3, "JAS": -1.1, "ASO": -1.2, "SON": -1.5, "OND": -1.8, "NDJ": -1.8 },
+        { "Year": 1989, "DJF": -1.7, "JFM": -1.4, "FMA": -1.1, "MAM": -0.8, "AMJ": -0.6, "MJJ": -0.4, "JJA": -0.3, "JAS": -0.3, "ASO": -0.2, "SON": -0.2, "OND": -0.2, "NDJ": -0.1 },
+        { "Year": 1990, "DJF": 0.1, "JFM": 0.2, "FMA": 0.3, "MAM": 0.3, "AMJ": 0.3, "MJJ": 0.3, "JJA": 0.3, "JAS": 0.4, "ASO": 0.4, "SON": 0.3, "OND": 0.4, "NDJ": 0.4 },
+        { "Year": 1991, "DJF": 0.4, "JFM": 0.3, "FMA": 0.2, "MAM": 0.3, "AMJ": 0.5, "MJJ": 0.6, "JJA": 0.7, "JAS": 0.6, "ASO": 0.6, "SON": 0.8, "OND": 1.2, "NDJ": 1.5 },
+        { "Year": 1992, "DJF": 1.7, "JFM": 1.6, "FMA": 1.5, "MAM": 1.3, "AMJ": 1.1, "MJJ": 0.7, "JJA": 0.4, "JAS": 0.1, "ASO": -0.1, "SON": -0.2, "OND": -0.3, "NDJ": -0.1 },
+        { "Year": 1993, "DJF": 0.1, "JFM": 0.3, "FMA": 0.5, "MAM": 0.7, "AMJ": 0.7, "MJJ": 0.6, "JJA": 0.3, "JAS": 0.3, "ASO": 0.2, "SON": 0.1, "OND": 0.0, "NDJ": 0.1 },
+        { "Year": 1994, "DJF": 0.1, "JFM": 0.1, "FMA": 0.2, "MAM": 0.3, "AMJ": 0.4, "MJJ": 0.4, "JJA": 0.4, "JAS": 0.4, "ASO": 0.6, "SON": 0.7, "OND": 1.0, "NDJ": 1.1 },
+        { "Year": 1995, "DJF": 1.0, "JFM": 0.7, "FMA": 0.5, "MAM": 0.3, "AMJ": 0.1, "MJJ": 0.0, "JJA": -0.2, "JAS": -0.5, "ASO": -0.8, "SON": -1.0, "OND": -1.0, "NDJ": -1.0 },
+        { "Year": 1996, "DJF": -0.9, "JFM": -0.8, "FMA": -0.6, "MAM": -0.4, "AMJ": -0.3, "MJJ": -0.3, "JJA": -0.3, "JAS": -0.3, "ASO": -0.4, "SON": -0.4, "OND": -0.4, "NDJ": -0.5 },
+        { "Year": 1997, "DJF": -0.5, "JFM": -0.4, "FMA": -0.1, "MAM": 0.3, "AMJ": 0.8, "MJJ": 1.2, "JJA": 1.6, "JAS": 1.9, "ASO": 2.1, "SON": 2.3, "OND": 2.4, "NDJ": 2.4 },
+        { "Year": 1998, "DJF": 2.2, "JFM": 1.9, "FMA": 1.4, "MAM": 1.0, "AMJ": 0.5, "MJJ": -0.1, "JJA": -0.8, "JAS": -1.1, "ASO": -1.3, "SON": -1.4, "OND": -1.5, "NDJ": -1.6 },
+        { "Year": 1999, "DJF": -1.5, "JFM": -1.3, "FMA": -1.1, "MAM": -1.0, "AMJ": -1.0, "MJJ": -1.0, "JJA": -1.1, "JAS": -1.1, "ASO": -1.2, "SON": -1.3, "OND": -1.5, "NDJ": -1.7 },
+        { "Year": 2000, "DJF": -1.7, "JFM": -1.4, "FMA": -1.1, "MAM": -0.8, "AMJ": -0.7, "MJJ": -0.6, "JJA": -0.6, "JAS": -0.5, "ASO": -0.5, "SON": -0.6, "OND": -0.7, "NDJ": -0.7 },
+        { "Year": 2001, "DJF": -0.7, "JFM": -0.5, "FMA": -0.4, "MAM": -0.3, "AMJ": -0.3, "MJJ": -0.1, "JJA": -0.1, "JAS": -0.1, "ASO": -0.2, "SON": -0.3, "OND": -0.3, "NDJ": -0.3 },
+        { "Year": 2002, "DJF": -0.1, "JFM": 0.0, "FMA": 0.1, "MAM": 0.2, "AMJ": 0.4, "MJJ": 0.7, "JJA": 0.8, "JAS": 0.9, "ASO": 1.0, "SON": 1.2, "OND": 1.3, "NDJ": 1.1 },
+        { "Year": 2003, "DJF": 0.9, "JFM": 0.6, "FMA": 0.4, "MAM": 0.0, "AMJ": -0.3, "MJJ": -0.2, "JJA": 0.1, "JAS": 0.2, "ASO": 0.3, "SON": 0.3, "OND": 0.4, "NDJ": 0.4 },
+        { "Year": 2004, "DJF": 0.4, "JFM": 0.3, "FMA": 0.2, "MAM": 0.2, "AMJ": 0.2, "MJJ": 0.3, "JJA": 0.5, "JAS": 0.6, "ASO": 0.7, "SON": 0.7, "OND": 0.7, "NDJ": 0.7 },
+        { "Year": 2005, "DJF": 0.6, "JFM": 0.6, "FMA": 0.4, "MAM": 0.4, "AMJ": 0.3, "MJJ": 0.1, "JJA": -0.1, "JAS": -0.1, "ASO": -0.1, "SON": -0.3, "OND": -0.6, "NDJ": -0.8 },
+        { "Year": 2006, "DJF": -0.9, "JFM": -0.8, "FMA": -0.6, "MAM": -0.4, "AMJ": -0.1, "MJJ": 0.0, "JJA": 0.1, "JAS": 0.3, "ASO": 0.5, "SON": 0.8, "OND": 0.9, "NDJ": 0.9 },
+        { "Year": 2007, "DJF": 0.7, "JFM": 0.2, "FMA": -0.1, "MAM": -0.3, "AMJ": -0.4, "MJJ": -0.5, "JJA": -0.6, "JAS": -0.8, "ASO": -1.1, "SON": -1.3, "OND": -1.5, "NDJ": -1.6 },
+        { "Year": 2008, "DJF": -1.6, "JFM": -1.5, "FMA": -1.3, "MAM": -1.0, "AMJ": -0.8, "MJJ": -0.6, "JJA": -0.4, "JAS": -0.2, "ASO": -0.2, "SON": -0.4, "OND": -0.6, "NDJ": -0.7 },
+        { "Year": 2009, "DJF": -0.8, "JFM": -0.8, "FMA": -0.6, "MAM": -0.3, "AMJ": 0.0, "MJJ": 0.3, "JJA": 0.5, "JAS": 0.6, "ASO": 0.7, "SON": 1.0, "OND": 1.4, "NDJ": 1.6 },
+        { "Year": 2010, "DJF": 1.5, "JFM": 1.2, "FMA": 0.8, "MAM": 0.4, "AMJ": -0.2, "MJJ": -0.7, "JJA": -1.0, "JAS": -1.3, "ASO": -1.6, "SON": -1.6, "OND": -1.6, "NDJ": -1.5 },
+        { "Year": 2011, "DJF": -1.3, "JFM": -1.0, "FMA": -0.8, "MAM": -0.6, "AMJ": -0.5, "MJJ": -0.4, "JJA": -0.4, "JAS": -0.6, "ASO": -0.8, "SON": -1.0, "OND": -1.0, "NDJ": -0.9 },
+        { "Year": 2012, "DJF": -0.7, "JFM": -0.6, "FMA": -0.5, "MAM": -0.4, "AMJ": -0.2, "MJJ": 0.1, "JJA": 0.3, "JAS": 0.4, "ASO": 0.4, "SON": 0.3, "OND": 0.1, "NDJ": -0.1 },
+        { "Year": 2013, "DJF": -0.3, "JFM": -0.3, "FMA": -0.2, "MAM": -0.2, "AMJ": -0.3, "MJJ": -0.3, "JJA": -0.4, "JAS": -0.3, "ASO": -0.2, "SON": -0.1, "OND": -0.1, "NDJ": -0.2 },
+        { "Year": 2014, "DJF": -0.3, "JFM": -0.3, "FMA": -0.1, "MAM": 0.2, "AMJ": 0.3, "MJJ": 0.2, "JJA": 0.1, "JAS": 0.1, "ASO": 0.3, "SON": 0.5, "OND": 0.7, "NDJ": 0.8 },
+        { "Year": 2015, "DJF": 0.7, "JFM": 0.6, "FMA": 0.7, "MAM": 0.8, "AMJ": 1.0, "MJJ": 1.3, "JJA": 1.6, "JAS": 1.9, "ASO": 2.2, "SON": 2.5, "OND": 2.6, "NDJ": 2.8 },
+        { "Year": 2016, "DJF": 2.6, "JFM": 2.3, "FMA": 1.7, "MAM": 1.0, "AMJ": 0.5, "MJJ": 0.0, "JJA": -0.3, "JAS": -0.5, "ASO": -0.6, "SON": -0.6, "OND": -0.6, "NDJ": -0.5 },
+        { "Year": 2017, "DJF": -0.2, "JFM": 0.0, "FMA": 0.2, "MAM": 0.3, "AMJ": 0.4, "MJJ": 0.4, "JJA": 0.2, "JAS": -0.1, "ASO": -0.3, "SON": -0.6, "OND": -0.8, "NDJ": -0.9 },
+        { "Year": 2018, "DJF": -0.8, "JFM": -0.7, "FMA": -0.6, "MAM": -0.4, "AMJ": -0.1, "MJJ": 0.1, "JJA": 0.1, "JAS": 0.3, "ASO": 0.5, "SON": 0.8, "OND": 1.0, "NDJ": 0.9 },
+        { "Year": 2019, "DJF": 0.9, "JFM": 0.9, "FMA": 0.8, "MAM": 0.8, "AMJ": 0.6, "MJJ": 0.5, "JJA": 0.3, "JAS": 0.2, "ASO": 0.2, "SON": 0.4, "OND": 0.6, "NDJ": 0.7 },
+        { "Year": 2020, "DJF": 0.6, "JFM": 0.6, "FMA": 0.5, "MAM": 0.3, "AMJ": 0.0, "MJJ": -0.2, "JJA": -0.4, "JAS": -0.5, "ASO": -0.8, "SON": -1.1, "OND": -1.2, "NDJ": -1.1 },
+        { "Year": 2021, "DJF": -0.9, "JFM": -0.8, "FMA": -0.7, "MAM": -0.5, "AMJ": -0.4, "MJJ": -0.3, "JJA": -0.3, "JAS": -0.4, "ASO": -0.6, "SON": -0.8, "OND": -0.9, "NDJ": -0.9 },
+        { "Year": 2022, "DJF": -0.8, "JFM": -0.8, "FMA": -0.9, "MAM": -1.0, "AMJ": -0.9, "MJJ": -0.8, "JJA": -0.8, "JAS": -0.9, "ASO": -1.0, "SON": -0.9, "OND": -0.8, "NDJ": -0.7 },
+        { "Year": 2023, "DJF": -0.5, "JFM": -0.3, "FMA": 0.0, "MAM": 0.3, "AMJ": 0.6, "MJJ": 0.8, "JJA": 1.1, "JAS": 1.4, "ASO": 1.6, "SON": 1.8, "OND": 2.0, "NDJ": 2.1 },
+        { "Year": 2024, "DJF": 1.9, "JFM": 1.6, "FMA": 1.3, "MAM": 0.8, "AMJ": 0.5, "MJJ": 0.2, "JJA": 0.1, "JAS": -0.1, "ASO": -0.2, "SON": -0.2, "OND": -0.3, "NDJ": -0.4 },
+        { "Year": 2025, "DJF": -0.4, "JFM": -0.2, "FMA": -0.1, "MAM": 0.0, "AMJ": 0.0, "MJJ": 0.0, "JJA": -0.1, "JAS": -0.3, "ASO": -0.4, "SON": -0.5, "OND": -0.6, "NDJ": -0.5 },
+        { "Year": 2026, "DJF": -0.4, "JFM": -0.1, "FMA": 0.1, "MAM": 0.5, "AMJ": 1.0 }
+    ];
+
+    const monthsSeq = ["DJF", "JFM", "FMA", "MAM", "AMJ", "MJJ", "JJA", "JAS", "ASO", "SON", "OND", "NDJ"];
+    let chartInstance = null;
+
+    // 데이터 평탄화 함수 (일렬의 시계열 데이터로 가공)
+    function processData(start, end) {
+        const labels = [];
+        const values = [];
+        const colors = [];
+
+        rawOniData.forEach(row => {
+            if (row.Year >= start && row.Year <= end) {
+                monthsSeq.forEach(month => {
+                    // 데이터가 존재하는 월만 푸시 (예: 2026년은 AMJ 까지만 있음)
+                    if (row[month] !== undefined) {
+                        labels.push(`${row.Year} ${month}`);
+                        values.push(row[month]);
+
+                        // 엘니뇨 / 라니냐 / 평상시 색상 판정
+                        if (row[month] >= 0.5) {
+                            colors.push('rgba(239, 68, 68, 0.85)'); // 엘니뇨 빨강
+                        } else if (row[month] <= -0.5) {
+                            colors.push('rgba(59, 130, 246, 0.85)'); // 라니냐 파랑
+                        } else {
+                            colors.push('rgba(148, 163, 184, 0.4)');  // 평상시 회색
+                        }
+                    }
+                });
+            }
+        });
+
+        return { labels, values, colors };
+    }
+
+    // 셀렉트 필터 데이터 바인딩
+    function initFilters() {
+        const startSel = document.getElementById('startYear');
+        const endSel = document.getElementById('endYear');
+        const years = rawOniData.map(d => d.Year);
+
+        years.forEach(year => {
+            const opt1 = document.createElement('option');
+            opt1.value = year;
+            opt1.textContent = `${year}년`;
+            startSel.appendChild(opt1);
+
+            const opt2 = document.createElement('option');
+            opt2.value = year;
+            opt2.textContent = `${year}년`;
+            endSel.appendChild(opt2);
+        });
+
+        // 기본값 세팅: 최근 15년간 (2011 ~ 2026)
+        startSel.value = 2011;
+        endSel.value = 2026;
+
+        startSel.addEventListener('change', updateChart);
+        endSel.addEventListener('change', updateChart);
+    }
+
+    // 차트 렌더링 함수
+    function drawChart(labels, values, colors) {
+        const ctx = document.getElementById('oniChart').getContext('2d');
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'ONI 편차 (℃)',
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: colors.map(c => c.replace('0.85', '1')),
+                    borderWidth: 1,
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.9
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false // 색상 구분이 다양하므로 기본 범례 비활성화
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.parsed.y;
+                                let state = "평상시 (Neutral)";
+                                if (val >= 0.5) state = "엘니뇨 (El Niño)";
+                                if (val <= -0.5) state = "라니냐 (La Niña)";
+                                return ` 편차: ${val > 0 ? '+' : ''}${val} ℃ (${state})`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: {
+                            color: '#334155'
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            callback: function(value) {
+                                return (value > 0 ? '+' : '') + value + '℃';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '표층 수온 편차 (℃)',
+                            color: '#94a3b8'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 30 // 모바일 및 데스크톱에서 가독성을 지키기 위해 라벨 생략 조절
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateChart() {
+        const start = parseInt(document.getElementById('startYear').value);
+        const end = parseInt(document.getElementById('endYear').value);
+
+        // 예외 처리: 시작 연도가 종료 연도보다 클 경우 스왑
+        if (start > end) {
+            alert("시작 연도는 종료 연도보다 클 수 없습니다.");
+            document.getElementById('startYear').value = end;
+            return;
+        }
+
+        const { labels, values, colors } = processData(start, end);
+        drawChart(labels, values, colors);
+    }
+
+    // 실행 초기화
+    window.onload = () => {
+        initFilters();
+        updateChart();
+    };
+</script>
+
+</body>
+</html>
